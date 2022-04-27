@@ -8,8 +8,16 @@ import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 
+// -----------------------------------------------------------------------------
 final _isRunningNotifier = ValueNotifier<bool>(false);
 const _runningDuration = Duration(seconds: 60);
+
+// -----------------------------------------------------------------------------
+enum TokenDirection { left, neutral, right }
+
+class TokenMovement {
+  TokenDirection direction = TokenDirection.neutral;
+}
 
 // -----------------------------------------------------------------------------
 void main() {
@@ -64,19 +72,14 @@ class MainPage extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         const HeaderField(),
-        buildPlayZone(),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: const [
+            MeanderZone(),
+            MeanderZone(),
+          ],
+        ),
         const StartButton(),
-      ],
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  Row buildPlayZone() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: const [
-        MeanderZone(),
-        MeanderZone(),
       ],
     );
   }
@@ -95,11 +98,11 @@ class HeaderField extends StatelessWidget {
       child: ValueListenableBuilder(
           valueListenable: _isRunningNotifier,
           builder: (_, bool isRunning, __) {
-            if (isRunning) {
-              return const CountDownTimer(lapse: _runningDuration);
-            } else {
-              return const SizedBox(height: 15);
-            }
+            return DefaultTextStyle(
+                style: const TextStyle(fontSize: 15),
+                child: isRunning
+                    ? const CountDownTimer(lapse: _runningDuration)
+                    : const Text(""));
           }),
     );
   }
@@ -144,10 +147,11 @@ class _CountDownTimerState extends State<CountDownTimer> {
   // ---------------------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
-    final String remainRepr = remain.toString();
+    final String remainStr = remain.toString();
+    final startPos = remainStr.indexOf(":") + 1;
+    final endPos = remainStr.lastIndexOf(".");
     return Text(
-      remainRepr.substring(
-          remainRepr.indexOf(":") + 1, remainRepr.lastIndexOf(".")),
+      remainStr.substring(startPos, endPos),
     );
   }
 
@@ -211,10 +215,7 @@ class StartButton extends StatelessWidget {
         content: Center(
           child: Text(
             text,
-            style: const TextStyle(
-              fontSize: 100,
-              color: Colors.yellow,
-            ),
+            style: const TextStyle(fontSize: 100, color: Colors.yellow),
           ),
         ),
       ),
@@ -230,23 +231,35 @@ class MeanderZone extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final movement = TokenMovement()..direction = TokenDirection.neutral;
     final width = MediaQuery.of(context).size.width / 1.618 / 2;
     final height = MediaQuery.of(context).size.height / 1.618 / 1.618;
     return Column(
       children: [
         collisionTimer(context),
-        MeanderBox(size: Size(width, height)),
-        controlButtons(context),
+        MeanderBox(
+          size: Size(width, height),
+          movement: movement,
+        ),
+        buildControlButtons(movement),
       ],
     );
   }
 
   // ---------------------------------------------------------------------------
-  Widget controlButtons(BuildContext context) {
+  Widget buildControlButtons(TokenMovement movement) {
     return Row(
-      children: const [
-        ControlButton(iconData: Icons.arrow_back),
-        ControlButton(iconData: Icons.arrow_forward),
+      children: [
+        ControlButton(
+          iconData: Icons.arrow_back,
+          direction: TokenDirection.left,
+          movement: movement,
+        ),
+        ControlButton(
+          iconData: Icons.arrow_forward,
+          direction: TokenDirection.right,
+          movement: movement,
+        ),
       ],
     );
   }
@@ -263,28 +276,28 @@ class MeanderZone extends StatelessWidget {
 // -----------------------------------------------------------------------------
 class ControlButton extends StatelessWidget {
   final IconData iconData;
+  final TokenMovement movement;
+  final TokenDirection direction;
 
   const ControlButton({
     Key? key,
     required this.iconData,
+    required this.movement,
+    required this.direction,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(
-        left: 10,
-        right: 10,
-        bottom: 20,
-      ),
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: Theme.of(context).textTheme.bodyText2?.color,
-      ),
-      child: IconButton(
-        iconSize: 40,
-        icon: Icon(iconData),
-        onPressed: () {},
+    return GestureDetector(
+      onTapDown: (_) => movement.direction = direction,
+      onTapUp: (_) => movement.direction = TokenDirection.neutral,
+      child: Container(
+        margin: const EdgeInsets.only(left: 10, right: 10, bottom: 20),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Theme.of(context).textTheme.bodyText2?.color,
+        ),
+        child: Icon(iconData, size: 40),
       ),
     );
   }
@@ -293,10 +306,12 @@ class ControlButton extends StatelessWidget {
 // -----------------------------------------------------------------------------
 class MeanderBox extends StatefulWidget {
   final Size size;
+  final TokenMovement movement;
 
   const MeanderBox({
     Key? key,
     required this.size,
+    required this.movement,
   }) : super(key: key);
 
   @override
@@ -307,41 +322,32 @@ class _MeanderBoxState extends State<MeanderBox>
     with SingleTickerProviderStateMixin {
   late final AnimationController controller;
   late final Animation<double> animation;
-  double plotStartY = 0;
 
-  // ---------------------------------------------------------------------------
-  double plotFunction(double y) {
-    return 10 * sin(2 * pi / 100 * y + plotStartY) + 0 + 30;
-  }
+  final Size tokenSize = const Size(30, 30);
+  final Offset tokenSpeed = const Offset(1, 0);
+  final double meanderWidth = 60;
+
+  Offset tokenOffset = const Offset(0, 0);
+  double plotStartY = 0;
 
   // ---------------------------------------------------------------------------
   @override
   void initState() {
     super.initState();
+    setStartOffset();
     controller = AnimationController(duration: _runningDuration, vsync: this);
     animation =
         Tween<double>(begin: 0, end: widget.size.height).animate(controller);
-    animation.addListener(() => moveCurve());
-    _isRunningNotifier.addListener(() => checkIfRunning());
-  }
-
-  // ---------------------------------------------------------------------------
-  void checkIfRunning() {
-    if (_isRunningNotifier.value == true) {
-      controller.reset();
-      setState(() {});
-      controller.forward();
-    } else {
-      controller.stop();
-    }
+    animation.addListener(() => onAnimationCycle());
+    _isRunningNotifier.addListener(() => onChangeRunning());
   }
 
   // ---------------------------------------------------------------------------
   @override
   void dispose() {
-    animation.removeListener(() => moveCurve());
+    animation.removeListener(() => onAnimationCycle());
+    _isRunningNotifier.removeListener(() => onChangeRunning());
     controller.dispose();
-    _isRunningNotifier.removeListener(() => checkIfRunning());
     super.dispose();
   }
 
@@ -362,17 +368,90 @@ class _MeanderBoxState extends State<MeanderBox>
         children: [
           CustomPaint(
             size: widget.size,
-            painter: MeanderPainter(plotFunction: plotFunction),
+            painter: MeanderPainter(
+              plotFunction: plotFunction,
+              meanderWidth: meanderWidth,
+            ),
           ),
-          const MeanderToken(size: Size(30, 30), offset: Offset(50, 120))
+          MeanderToken(size: tokenSize, offset: tokenOffset)
         ],
       ),
     );
   }
 
   // ---------------------------------------------------------------------------
-  void moveCurve() {
-    setState(() => plotStartY = animation.value);
+  double plotFunction(double y) {
+    return 10 * sin(2 * pi / 150 * y + plotStartY) + 30;
+  }
+
+  // ---------------------------------------------------------------------------
+  void setStartOffset() {
+    // todo: verify not in collision
+    tokenOffset = Offset(
+      (widget.size.width - tokenSize.width) / 2,
+      (widget.size.height - tokenSize.height) / 3,
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  void onAnimationCycle() {
+    // todo: ensayar no cambiando el movimiento sino la posicion del token
+    // todo: pensar en que se vaya rodando por el borde
+    switch (widget.movement.direction) {
+      case TokenDirection.left:
+        tokenOffset -= tokenSpeed;
+        if (collisionDetected()) {
+          tokenOffset += tokenSpeed;
+          widget.movement.direction = TokenDirection.right;
+        }
+        break;
+      case TokenDirection.neutral:
+        break;
+      case TokenDirection.right:
+        tokenOffset += tokenSpeed;
+        if (collisionDetected()) {
+          tokenOffset -= tokenSpeed;
+          widget.movement.direction = TokenDirection.left;
+        }
+        break;
+    }
+    setState(() {
+      plotStartY = animation.value;
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  void onChangeRunning() {
+    if (_isRunningNotifier.value == true) {
+      controller.reset();
+      setStartOffset();
+      setState(() {});
+      controller.forward();
+    } else {
+      controller.stop();
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  bool collisionDetected() {
+    double tolerance = 2.0;
+    final y1 = tokenOffset.dy;
+    final y2 = tokenOffset.dy + tokenSize.height;
+    final x1 = plotFunction(y1);
+    final x2 = plotFunction(y2);
+    final x3 = x1 + meanderWidth;
+    final x4 = x2 + meanderWidth;
+    if (tokenOffset.dx + tolerance <= x1 ||
+        tokenOffset.dx + tolerance <= x2 ||
+        tokenOffset.dx <= plotFunction(tokenOffset.dy + tokenSize.height / 2) ||
+        tokenOffset.dx + tokenSize.width - tolerance >= x3 ||
+        tokenOffset.dx + tokenSize.width - tolerance >= x4 ||
+        tokenOffset.dx + tokenSize.width >=
+            plotFunction(tokenOffset.dy + tokenSize.height / 2) +
+                meanderWidth) {
+      return true;
+    }
+    return false;
   }
 }
 
@@ -383,7 +462,7 @@ class MeanderPainter extends CustomPainter {
 
   MeanderPainter({
     required this.plotFunction,
-    this.meanderWidth = 60,
+    required this.meanderWidth,
   }) : super();
 
   @override
@@ -424,7 +503,6 @@ class MeanderToken extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    /// todo: left, right as parameters
     return Positioned(
       width: size.width,
       height: size.height,
