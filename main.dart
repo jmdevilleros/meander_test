@@ -232,7 +232,7 @@ class MeanderZone extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final movement = TokenMovement()..direction = TokenDirection.neutral;
-    final width = MediaQuery.of(context).size.width / 1.618 / 2;
+    final width = MediaQuery.of(context).size.width / 1.618 / 1.618;
     final height = MediaQuery.of(context).size.height / 1.618 / 1.618;
     return Column(
       children: [
@@ -322,18 +322,25 @@ class _MeanderBoxState extends State<MeanderBox>
     with SingleTickerProviderStateMixin {
   late final AnimationController controller;
   late final Animation<double> animation;
+  late final double meanderWidth;
+  late final double plotShiftX;
+  late final Size tokenSize;
 
-  final Size tokenSize = const Size(30, 30);
   final Offset tokenSpeed = const Offset(1, 0);
-  final double meanderWidth = 60;
-
   Offset tokenOffset = const Offset(0, 0);
+
   double plotStartY = 0;
+  final plotAmplitude = Random().nextInt(10) + 20;
+  final plotPeriod = Random().nextInt(60) + 140;
+  final plotShiftY = Random().nextInt(150);
 
   // ---------------------------------------------------------------------------
   @override
   void initState() {
     super.initState();
+    plotShiftX = widget.size.width / 4;
+    meanderWidth = plotShiftX * 2;
+    tokenSize = Size(meanderWidth / 2.5, meanderWidth / 2.5);
     setStartOffset();
     controller = AnimationController(duration: _runningDuration, vsync: this);
     animation =
@@ -381,43 +388,51 @@ class _MeanderBoxState extends State<MeanderBox>
 
   // ---------------------------------------------------------------------------
   double plotFunction(double y) {
-    return 10 * sin(2 * pi / 150 * y + plotStartY) + 30;
+    final double B = 2 * pi / plotPeriod;
+    return plotAmplitude * sin(B * (y - plotShiftY) + plotStartY / 3) +
+        plotShiftX;
   }
 
   // ---------------------------------------------------------------------------
   void setStartOffset() {
-    // todo: verify not in collision
+    final startY = (widget.size.height - tokenSize.height) / 3;
     tokenOffset = Offset(
-      (widget.size.width - tokenSize.width) / 2,
-      (widget.size.height - tokenSize.height) / 3,
+      plotFunction(startY) + (meanderWidth - tokenSize.width) / 3,
+      startY,
     );
   }
 
   // ---------------------------------------------------------------------------
   void onAnimationCycle() {
-    // todo: ensayar no cambiando el movimiento sino la posicion del token
-    // todo: pensar en que se vaya rodando por el borde
+    plotStartY = animation.value;
+
+    final TokenDirection collisionDirection = checkCollision();
+
+    switch (collisionDirection) {
+      case TokenDirection.left: // Collision with left side of meander
+        tokenOffset += tokenSpeed;
+        widget.movement.direction = TokenDirection.neutral;
+        break;
+      case TokenDirection.neutral: // No collision
+        break;
+      case TokenDirection.right: // Collision with right side of meander
+        tokenOffset -= tokenSpeed;
+        widget.movement.direction = TokenDirection.neutral;
+        break;
+    }
+
     switch (widget.movement.direction) {
       case TokenDirection.left:
         tokenOffset -= tokenSpeed;
-        if (collisionDetected()) {
-          tokenOffset += tokenSpeed;
-          widget.movement.direction = TokenDirection.right;
-        }
         break;
       case TokenDirection.neutral:
         break;
       case TokenDirection.right:
         tokenOffset += tokenSpeed;
-        if (collisionDetected()) {
-          tokenOffset -= tokenSpeed;
-          widget.movement.direction = TokenDirection.left;
-        }
         break;
     }
-    setState(() {
-      plotStartY = animation.value;
-    });
+
+    setState(() {});
   }
 
   // ---------------------------------------------------------------------------
@@ -433,7 +448,7 @@ class _MeanderBoxState extends State<MeanderBox>
   }
 
   // ---------------------------------------------------------------------------
-  bool collisionDetected() {
+  TokenDirection checkCollision() {
     double tolerance = 2.0;
     final y1 = tokenOffset.dy;
     final y2 = tokenOffset.dy + tokenSize.height;
@@ -441,17 +456,24 @@ class _MeanderBoxState extends State<MeanderBox>
     final x2 = plotFunction(y2);
     final x3 = x1 + meanderWidth;
     final x4 = x2 + meanderWidth;
+
+    // Check collision with left side of meander
     if (tokenOffset.dx + tolerance <= x1 ||
         tokenOffset.dx + tolerance <= x2 ||
-        tokenOffset.dx <= plotFunction(tokenOffset.dy + tokenSize.height / 2) ||
-        tokenOffset.dx + tokenSize.width - tolerance >= x3 ||
+        tokenOffset.dx <= plotFunction(tokenOffset.dy + tokenSize.height / 2)) {
+      return TokenDirection.left;
+    }
+
+    // check collision with right side of meander
+    if (tokenOffset.dx + tokenSize.width - tolerance >= x3 ||
         tokenOffset.dx + tokenSize.width - tolerance >= x4 ||
         tokenOffset.dx + tokenSize.width >=
             plotFunction(tokenOffset.dy + tokenSize.height / 2) +
                 meanderWidth) {
-      return true;
+      return TokenDirection.right;
     }
-    return false;
+    // No collision
+    return TokenDirection.neutral;
   }
 }
 
@@ -469,7 +491,7 @@ class MeanderPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final plotPaint = Paint()
       ..color = Colors.yellow
-      ..strokeWidth = 2
+      ..strokeWidth = 1
       ..style = PaintingStyle.stroke;
 
     final leftSidePoints = <Offset>[
