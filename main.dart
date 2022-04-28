@@ -32,15 +32,23 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Meander proof-of-concept',
+      title: 'mngame2',
       theme: buildThemeData(),
       home: Center(
         child: Scaffold(
           appBar: AppBar(
-            title: const Text('Meander proof-of-concept'),
+            title: const Text('mngame2/proof-of-concept'),
             centerTitle: true,
           ),
           body: const MainPage(),
+          bottomNavigationBar: Container(
+            height: 40,
+            color: Colors.lightGreen,
+            child: const Align(
+              child: Text("Ads zone"),
+              alignment: Alignment.bottomCenter,
+            ),
+          ),
         ),
       ),
     );
@@ -54,9 +62,7 @@ class MyApp extends StatelessWidget {
       primarySwatch: primaryColor,
       scaffoldBackgroundColor: Colors.black,
       textTheme: const TextTheme(
-        bodyText2: TextStyle(
-          color: primaryColor,
-        ),
+        bodyText2: TextStyle(color: primaryColor, fontSize: 30),
       ),
     );
   }
@@ -69,7 +75,7 @@ class MainPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
         const HeaderField(),
         Row(
@@ -99,7 +105,7 @@ class HeaderField extends StatelessWidget {
           valueListenable: _isRunningNotifier,
           builder: (_, bool isRunning, __) {
             return DefaultTextStyle(
-                style: const TextStyle(fontSize: 15, color: Colors.white),
+                style: Theme.of(context).textTheme.bodyText2!,
                 child: isRunning
                     ? const CountDownTimer(lapse: _runningDuration)
                     : const Text("00:00"));
@@ -117,7 +123,6 @@ class CountDownTimer extends StatefulWidget {
     required this.lapse,
   }) : super(key: key);
 
-  // ---------------------------------------------------------------------------
   @override
   State<CountDownTimer> createState() => _CountDownTimerState();
 }
@@ -185,10 +190,8 @@ class StartButton extends StatelessWidget {
         valueListenable: _isRunningNotifier,
         child: const Icon(Icons.directions_run),
         builder: (_, bool isRunning, __) {
-          return Icon(
-            isRunning == true ? Icons.stop : Icons.play_arrow,
-            size: 40,
-          );
+          return Icon(isRunning == true ? Icons.stop : Icons.play_arrow,
+              size: 40);
         },
       ),
     );
@@ -265,7 +268,7 @@ class MeanderZone extends StatelessWidget {
           direction: TokenDirection.left,
           movement: movement,
         ),
-        const SizedBox(width: 20),
+        //const SizedBox(width: 20),
         ControlButton(
           iconData: Icons.chevron_right,
           direction: TokenDirection.right,
@@ -300,7 +303,7 @@ class ControlButton extends StatelessWidget {
           shape: BoxShape.circle,
           color: Theme.of(context).textTheme.bodyText2?.color,
         ),
-        child: Icon(iconData, size: 50),
+        child: Icon(iconData, size: 60),
       ),
     );
   }
